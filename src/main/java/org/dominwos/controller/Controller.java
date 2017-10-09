@@ -2,11 +2,13 @@ package org.dominwos.controller;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import org.dominwos.model.Order;
 import org.dominwos.model.Product;
 import org.dominwos.repository.OrdersRepository;
 import org.dominwos.repository.ProductsRepository;
+import org.dominwos.service.OrdersService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ public class Controller {
 
     @Autowired
     OrdersRepository ordersRepository;
+
+    @Autowired
+    OrdersService ordersService;
 
     @RequestMapping(value = "/liveness")
     public String livenessProbe(){
@@ -57,25 +62,12 @@ public class Controller {
 
     @RequestMapping(value = "/orders", method = RequestMethod.POST)
     public Order addOrder(@RequestBody List<Long> productsIds) {
-        List<Product> productsDetails = productsRepository.getAvailableProductsForIds(productsIds);
-        BigDecimal totalPrice = productsDetails.stream().map(product -> product.getPrice()).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        Order order = new Order();
-        order.setOrderedProducts(productsDetails);
-        order.setTotalPrice(totalPrice);
-
-        if(productsDetails.isEmpty()) {
-            log.warn("List of ordered products is empty or none of the products is available! Order will not be saved in DB!");
-            return order;
-        } else if(productsDetails.size() != productsIds.size()) {
-            log.debug("One or more products from orderList are not available, adding all available products to Order.");
+        Optional<Order> createdOrder = ordersService.createNewOrder(productsIds);
+        if(!createdOrder.isPresent()) {
+            log.warn("New order was not created!");
         }
 
-        productsDetails.forEach(product -> product.setAvailable(false));
-        productsRepository.save(productsDetails);
-        ordersRepository.save(order);
-
-        return order;
+        return createdOrder.orElse(new Order());
     }
 
 }
