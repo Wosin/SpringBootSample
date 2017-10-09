@@ -26,6 +26,8 @@ public class Controller {
     @Autowired
     ProductsRepository productsRepository;
 
+    @Autowired
+    OrdersRepository ordersRepository;
 
     @RequestMapping(value = "/liveness")
     public String livenessProbe(){
@@ -48,6 +50,32 @@ public class Controller {
         return productsRepository.findOne(id);
     }
 
+    @RequestMapping(value = "/orders", method = RequestMethod.GET)
+    public List<Order> getAllOrders() {
+        return ordersRepository.findAll();
+    }
 
+    @RequestMapping(value = "/orders", method = RequestMethod.POST)
+    public Order addOrder(@RequestBody List<Long> productsIds) {
+        List<Product> productsDetails = productsRepository.getAvailableProductsForIds(productsIds);
+        BigDecimal totalPrice = productsDetails.stream().map(product -> product.getPrice()).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Order order = new Order();
+        order.setOrderedProducts(productsDetails);
+        order.setTotalPrice(totalPrice);
+
+        if(productsDetails.isEmpty()) {
+            log.warn("List of ordered products is empty or none of the products is available! Order will not be saved in DB!");
+            return order;
+        } else if(productsDetails.size() != productsIds.size()) {
+            log.debug("One or more products from orderList are not available, adding all available products to Order.");
+        }
+
+        productsDetails.forEach(product -> product.setAvailable(false));
+        productsRepository.save(productsDetails);
+        ordersRepository.save(order);
+
+        return order;
+    }
 
 }
